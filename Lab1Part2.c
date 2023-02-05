@@ -5,11 +5,6 @@
 #define HEX5_HEX4_BASE  0xFF200030
 #define SW_BASE         0xFF200040
 
-#define min(a, b) \
-    ({  __typeof__ (a) _a = a; \
-        __typeof__ (b) _b = b; \
-        _a < _b ? _a : _b; })
-
 /* 7 SEGMENT DISPLAY INTERFACE
     -> Reference 2.10.2 in DE10 Datasheet
 
@@ -30,38 +25,38 @@
       3
 */
 
-unsigned char SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[10] = {
-    0b00111111, /* 0 */
-    0b00000110, /* 1 */
-    0b01011011, /* 2 */
-    0b01001111, /* 3 */
-    0b01100110, /* 4 */
-    0b01101101, /* 5 */
-    0b01111101, /* 6 */
-    0b00000111, /* 7 */
-    0b01111111, /* 8 */
-    0b01101111, /* 9 */
-    0b01000000  /* - */
+typedef unsigned int hex_digit_t;
+
+hex_digit_t SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[11] = {
+    0b00111111 << 24, /* 0 */
+    //0b11000000 << 24, /* 0 */
+    0b00000110 << 24, /* 1 */
+    //0b11111001 << 24, /* 1 */
+    0b01011011 << 24, /* 2 */
+    //0b10100100 << 24, /* 2 */
+    0b01001111 << 24, /* 3 */
+    //0b10110000 << 24, /* 3 */
+    0b01100110 << 24, /* 4 */
+    //0b10011001 << 24, /* 4 */
+    0b01101101 << 24, /* 5 */
+    //0b10010010 << 24, /* 5 */
+    0b01111101 << 24, /* 6 */
+    //0b10000010 << 24, /* 6 */
+    0b00000111 << 24, /* 7 */
+    //0b11111000 << 24, /* 7 */
+    0b01111111 << 24, /* 8 */
+    //0b10000000 << 24, /* 8 */
+    0b01101111 << 24, /* 9 */
+    //0b10010000 << 24, /* 9 */
+    0b01000000 << 24  /* - */
 };
 
-typedef struct _seven_segment_display {
-    unsigned char top_bar; // 8 bit integer
-    unsigned char top_right_bar; // 8 bit integer
-    unsigned char bottom_right_bar; // 8 bit integer
-    unsigned char bottom_bar; // 8 bit integer
-    unsigned char bottom_left_bar; // 8 bit integer
-    unsigned char top_left_bar; // 8 bit integer
-    unsigned char centre_bar; // 8 bit integer
-    unsigned char unused; // 8 bit integer
-} seven_segment_display;
-
-// could make these a bank struct
-volatile seven_segment_display* const hex0_ptr = (seven_segment_display*)(HEX3_HEX0_BASE);
-volatile seven_segment_display* const hex1_ptr = (seven_segment_display*)(HEX3_HEX0_BASE + 0x20);
-volatile seven_segment_display* const hex2_ptr = (seven_segment_display*)(HEX3_HEX0_BASE + 0x40);
-volatile seven_segment_display* const hex3_ptr = (seven_segment_display*)(HEX3_HEX0_BASE + 0x60);
-volatile seven_segment_display* const hex4_ptr = (seven_segment_display*)(HEX5_HEX4_BASE);
-volatile seven_segment_display* const hex5_ptr = (seven_segment_display*)(HEX5_HEX4_BASE + 0x20);
+// there are two hex registers. One is a 32 bit register (0xff200020) where each byte
+// maps to one hex, so four 7SDs total (see preamble/docs). The other two
+// 7SDs are controlled with the bottom 16 bits of the next register (0xff200030). So,
+// 
+volatile unsigned int* const hex_register_one = (unsigned int*)(HEX3_HEX0_BASE);
+volatile unsigned int* const hex_register_two = (unsigned int*)(HEX5_HEX4_BASE);
 
 // Input is a 32 bit value in decimal
 void display_hex(int value)
@@ -69,8 +64,8 @@ void display_hex(int value)
     // The max value displayable is 999,999
     if (value > 999999) return;
     
-    int value_cpy = value; // if value is negative, c implicitly 
-    unsigned char is_negative = 0;
+    int value_cpy = value;
+    unsigned int is_negative = 0;
     if (value < 0) {
         is_negative = 1;
         value_cpy = 0 - value; // take the abs value 
@@ -78,17 +73,68 @@ void display_hex(int value)
     
     // I don't know if this is the fastest way to do this
     unsigned char idx = 0;
-    unsigned char digits[6];
+    unsigned int digits[6];
+    hex_digit_t* this_digit_hex_pattern;
+    unsigned int this_digit;
     while (value_cpy > 0) {
-        digits[idx] = value_cpy % 10;
+        this_digit = value_cpy % 10;
+        this_digit_hex_pattern = &SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[this_digit];
+        
+        digits[idx] = *this_digit_hex_pattern;
+        
         value_cpy /= 10; // floor of the number div 10
         idx += 1;
     }
 
-    // use minterms for 0-9 in a lookup table :^)
-    for (idx = 5; idx >= 0; idx++) {
-        // write to 6 - idx th hex display idx-th digit in the lookup table 
+    // check to make sure negative sign won't go out of bounds
+    if (idx - 7 > 0) {
+        return;
     }
+
+    // idx -1 is last nonzero digit
+    for (int i = 5; i > idx - 1; i--) {
+        digits[i] = SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[0];
+    }
+
+    // display the digits now
+    // 
+    // these all have to be 32 bit integers because you can't do
+    // bitwise operations with varying-sized types 
+    // 
+    // the number we are bitshifting is the actual data value in the hex
+    // register. Addressing is of no concern here because we're bitshifting
+    // it by 8 bits (1 byte) every time anyways. No need to change the pointer;
+    // you're just changing the value itself
+    // 
+    // 0b01011011 >> 8 = 0b( 01011011 00000000 )
+    //                |= 0b( 00000000 01100101 )
+    //                 =     01011011 01100101
+
+    for (int i = 0; i < 6; i++) {
+        printf("%d\n", digits[i]);
+    }
+
+    *hex_register_two = 0;
+    *hex_register_one = 0; // initialize to 0b000[...]
+    
+    *hex_register_one |= digits[0];
+    *hex_register_one >>= 8;
+    printf("\nafter first: %d\n", *hex_register_one);
+
+    *hex_register_one |= digits[1];
+    *hex_register_one >>= 8;
+    printf("after second: %d\n", *hex_register_one);
+
+    *hex_register_one |= digits[2];
+    *hex_register_one >>= 8;
+    printf("after third: %d\n", *hex_register_one);
+
+    *hex_register_one |= digits[3];
+    printf("after fourth: %d\n", *hex_register_one);
+
+    // *hex_register_one = __UINT32_MAX__;
+
+    return;
 }
 
 int read_switches(void)
@@ -96,4 +142,5 @@ int read_switches(void)
 }
 	
 int main(void) {
+    display_hex(9876);
 }
