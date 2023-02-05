@@ -5,6 +5,11 @@
 #define HEX5_HEX4_BASE  0xFF200030
 #define SW_BASE         0xFF200040
 
+#define min(a, b) \
+    ({  __typeof__ (a) _a = a; \
+        __typeof__ (b) _b = b; \
+        _a < _b ? _a : _b; })
+
 /* 7 SEGMENT DISPLAY INTERFACE
     -> Reference 2.10.2 in DE10 Datasheet
 
@@ -24,6 +29,20 @@
     4   2
       3
 */
+
+unsigned char SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[10] = {
+    0b00111111, /* 0 */
+    0b00000110, /* 1 */
+    0b01011011, /* 2 */
+    0b01001111, /* 3 */
+    0b01100110, /* 4 */
+    0b01101101, /* 5 */
+    0b01111101, /* 6 */
+    0b00000111, /* 7 */
+    0b01111111, /* 8 */
+    0b01101111, /* 9 */
+    0b01000000  /* - */
+};
 
 typedef struct _seven_segment_display {
     unsigned char top_bar; // 8 bit integer
@@ -45,22 +64,34 @@ volatile seven_segment_display* const hex4_ptr = (seven_segment_display*)(HEX5_H
 volatile seven_segment_display* const hex5_ptr = (seven_segment_display*)(HEX5_HEX4_BASE + 0x20);
 
 // Input is a 32 bit value in decimal
-void DisplayHex(int value)
+void display_hex(int value)
 {
     // The max value displayable is 999,999
     if (value > 999999) return;
     
-    int value_cpy = value;
-    char is_negative = 0;
+    int value_cpy = value; // if value is negative, c implicitly 
+    unsigned char is_negative = 0;
     if (value < 0) {
         is_negative = 1;
         value_cpy = 0 - value; // take the abs value 
+    } 
+    
+    // I don't know if this is the fastest way to do this
+    unsigned char idx = 0;
+    unsigned char digits[6];
+    while (value_cpy > 0) {
+        digits[idx] = value_cpy % 10;
+        value_cpy /= 10; // floor of the number div 10
+        idx += 1;
     }
 
-    value_cpy & (int)0b1111; 
+    // use minterms for 0-9 in a lookup table :^)
+    for (idx = 5; idx >= 0; idx++) {
+        // write to 6 - idx th hex display idx-th digit in the lookup table 
+    }
 }
 
-int ReadSwitches(void)
+int read_switches(void)
 {
 }
 	
