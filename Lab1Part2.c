@@ -29,32 +29,21 @@ typedef unsigned int hex_digit_t;
 
 hex_digit_t SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[11] = {
     0b00111111 << 24, /* 0 */
-    //0b11000000 << 24, /* 0 */
     0b00000110 << 24, /* 1 */
-    //0b11111001 << 24, /* 1 */
     0b01011011 << 24, /* 2 */
-    //0b10100100 << 24, /* 2 */
     0b01001111 << 24, /* 3 */
-    //0b10110000 << 24, /* 3 */
     0b01100110 << 24, /* 4 */
-    //0b10011001 << 24, /* 4 */
     0b01101101 << 24, /* 5 */
-    //0b10010010 << 24, /* 5 */
     0b01111101 << 24, /* 6 */
-    //0b10000010 << 24, /* 6 */
     0b00000111 << 24, /* 7 */
-    //0b11111000 << 24, /* 7 */
     0b01111111 << 24, /* 8 */
-    //0b10000000 << 24, /* 8 */
     0b01101111 << 24, /* 9 */
-    //0b10010000 << 24, /* 9 */
     0b01000000 << 24  /* - */
 };
 
 // there are two hex registers. One is a 32 bit register (0xff200020) where each byte
 // maps to one hex, so four 7SDs total (see preamble/docs). The other two
-// 7SDs are controlled with the bottom 16 bits of the next register (0xff200030). So,
-// 
+// 7SDs are controlled with the bottom 16 bits of the next register (0xff200030).
 volatile unsigned int* const hex_register_one = (unsigned int*)(HEX3_HEX0_BASE);
 volatile unsigned int* const hex_register_two = (unsigned int*)(HEX5_HEX4_BASE);
 
@@ -110,29 +99,15 @@ void display_hex(int value)
     //                |= 0b( 00000000 01100101 )
     //                 =     01011011 01100101
 
-    for (int i = 0; i < 6; i++) {
-        printf("%d\n", digits[i]);
-    }
-
     *hex_register_two = 0;
     *hex_register_one = 0; // initialize to 0b000[...]
-    
-    *hex_register_one |= digits[0];
-    *hex_register_one >>= 8;
-    printf("\nafter first: %d\n", *hex_register_one);
 
-    *hex_register_one |= digits[1];
-    *hex_register_one >>= 8;
-    printf("after second: %d\n", *hex_register_one);
-
-    *hex_register_one |= digits[2];
-    *hex_register_one >>= 8;
-    printf("after third: %d\n", *hex_register_one);
-
+    // register length - 1. Don't bitshift after last entry
+    for (idx = 0; idx < 3; idx++) {
+        *hex_register_one |= digits[idx];
+        *hex_register_one >>= 8;
+    }
     *hex_register_one |= digits[3];
-    printf("after fourth: %d\n", *hex_register_one);
-
-    // *hex_register_one = __UINT32_MAX__;
 
     return;
 }
