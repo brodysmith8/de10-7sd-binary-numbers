@@ -37,12 +37,13 @@ void write_to_hex(unsigned int* to_write) {
     *hex_register_one_ptr |= *(to_write + 3);
 } 
 
-// Input is a 32 bit value in decimal. If value is >999999 (max displayable number),
-// the function sets all 7SDs blank
+// Input is a 32 bit value in decimal
 void display_hex(int value)
 {
     unsigned int digits[6] = {0};
     unsigned char idx = 0;
+
+    // set all 7SDs to blank
     if (value > 999999) {
         for (idx = 0; idx < 4; idx++) {
             digits[idx] = 0b0;
