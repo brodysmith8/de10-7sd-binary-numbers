@@ -73,13 +73,6 @@ void display_hex(int value)
     return;
 }
 
-// int pow(int* base, int* exponent) {
-//     int res = *base;
-//     for (int i = 1; i < exponent; i++) {
-//         res *= *base;
-//     }
-// }
-
 // SW0 is the bit at the base, SW1 is the next, etc
 volatile int* const switch_bank_ptr = (int *)(SW_BASE);
 int read_switches(void) {
