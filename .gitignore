@@ -1,7 +1,6 @@
-.vscode/settings.json
-
 # no compiled files
 *
 !/**/
 !*.*
 .gitignore
+.vscode/settings.json

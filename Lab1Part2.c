@@ -21,8 +21,8 @@ hex_digit_t SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[12] = {
 };
 
 // volatile because hardware
-volatile unsigned int* const hex_register_one = (unsigned int*)(HEX3_HEX0_BASE);
-volatile unsigned int* const hex_register_two = (unsigned int*)(HEX5_HEX4_BASE);
+volatile unsigned int* const hex_register_one_ptr = (unsigned int*)(HEX3_HEX0_BASE);
+volatile unsigned int* const hex_register_two_ptr = (unsigned int*)(HEX5_HEX4_BASE);
 
 // Input is a 32 bit value in decimal
 void display_hex(int value)
@@ -33,9 +33,10 @@ void display_hex(int value)
     int value_cpy = value;
 
     // take the abs value 
-    unsigned int is_negative = 0;
+    unsigned char is_negative = 0;
     if (value < 0) {
         value_cpy = 0 - value; 
+        is_negative = 1;
     } 
     
     unsigned char idx = 0;
@@ -47,29 +48,57 @@ void display_hex(int value)
         idx += 1;
     }
 
+
     // make leading places nothing, or add the negative sign just before
     // the first digit
     for (int i = 5; i > idx - 1; i--) {
         // silly 
-        digits[i] = SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[10 + (i == idx)];
+        digits[i] = SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[10 + (is_negative && i == idx)];
     }
 
-    *hex_register_one = 0;
-    *hex_register_two = 0;
+    if (value == 0) {
+        digits[0] = SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[0];   
+    }
+
+    *hex_register_one_ptr = 0;
+    *hex_register_two_ptr = 0;
 
     // register length - 1. Don't bitshift after last entry
     for (idx = 0; idx < 3; idx++) {
-        *hex_register_one |= digits[idx];
-        *hex_register_one >>= 8;
+        *hex_register_one_ptr |= digits[idx];
+        *hex_register_one_ptr >>= 8;
     }
-    *hex_register_one |= digits[3];
+    *hex_register_one_ptr |= digits[3];
 
     return;
 }
 
+// int pow(int* base, int* exponent) {
+//     int res = *base;
+//     for (int i = 1; i < exponent; i++) {
+//         res *= *base;
+//     }
+// }
+
+// SW0 is the bit at the base, SW1 is the next, etc
+volatile int* const switch_bank_ptr = (int *)(SW_BASE);
 int read_switches(void) {
+    return *switch_bank_ptr; 
 }
 	
+// in the sim without the delay, the number flickers because it's 
+// redrawn from left-to-right every iteration. I don't think this 
+// would happen irl but the effect is easily mitigated. Also, the
+// delay will help  
+
+volatile int const DELAY_LENGTH = 700000;
 int main(void) {
-    display_hex(-9876);
+    int num;
+    volatile int delay_count = 0;
+    while(1) {
+        num = read_switches();
+        display_hex(num);
+        for (delay_count = DELAY_LENGTH; delay_count != 0; --delay_count)
+            ; // delay loop
+    }
 }
