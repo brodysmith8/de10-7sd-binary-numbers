@@ -20,6 +20,15 @@ hex_digit_t SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[12] = {
     0b01000000 << 24  /* - */
 };
 
+unsigned int ERR_PATTERN[] = {
+    0b01010000 << 24, /* R */
+    0b01011100 << 24, /* O */
+    0b01010000 << 24, /* R */
+    0b01010000 << 24, /* R */
+    0b01111001 << 24, /* E */
+    0b00000000 << 24  /*   */
+};
+
 // volatile because hardware
 volatile unsigned int* const hex_register_one_ptr = (unsigned int*)(HEX3_HEX0_BASE);
 volatile unsigned int* const hex_register_two_ptr = (unsigned int*)(HEX5_HEX4_BASE);
@@ -27,14 +36,17 @@ volatile unsigned int* const hex_register_two_ptr = (unsigned int*)(HEX5_HEX4_BA
 void write_to_hex(unsigned int* to_write) {
     *hex_register_one_ptr = 0;
     *hex_register_two_ptr = 0;
-
+    int idx;
     // register length - 1. Don't bitshift after last entry
-    for (int idx = 0; idx < 3; idx++) {
+    for (idx = 0; idx < 3; idx++) {
         *hex_register_one_ptr |= *(to_write + idx);
         *hex_register_one_ptr >>= 8;
     }
 
     *hex_register_one_ptr |= *(to_write + 3);
+
+    *hex_register_two_ptr |= (*(to_write + 4) >> 24);
+    *hex_register_two_ptr |= (*(to_write + 5) >> 16);
 } 
 
 // Input is a 32 bit value in decimal
@@ -60,6 +72,7 @@ void display_hex(int value)
         value_cpy = 0 - value; 
         is_negative = 1;
     } 
+
     
     while (value_cpy > 0) {
         digits[idx] = SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[value_cpy % 10];
@@ -68,6 +81,10 @@ void display_hex(int value)
         idx += 1;
     }
 
+    if (is_negative && idx == 6) {
+        write_to_hex(ERR_PATTERN);
+        return;
+    }
 
     // make leading places nothing, or add the negative sign just before
     // the first digit
@@ -97,17 +114,19 @@ int read_switches(void) {
 
 volatile int DELAY_LENGTH = 700000;
 int main(void) {
-    int num;
-    volatile int delay_count = 0;
-    while(1) {
-        // on 
-        num = read_switches();
-        display_hex(num);
+    display_hex(-345434);
+    // int num;
+    // volatile int delay_count = 0;
+    // while(1) {
+    //     // on 
+    //     num = read_switches();
+    //     display_hex(num);
 
-        for (delay_count = DELAY_LENGTH; delay_count != 0; --delay_count) {}
+    //     for (delay_count = DELAY_LENGTH; delay_count != 0; --delay_count) {}
         
-        // off
-        display_hex(1000000);
-        for (delay_count = DELAY_LENGTH; delay_count != 0; --delay_count) {}
-    }
+    //     // off
+    //     display_hex(1000000);
+    //     for (delay_count = DELAY_LENGTH; delay_count != 0; --delay_count) {}
+    // }
 }
+
