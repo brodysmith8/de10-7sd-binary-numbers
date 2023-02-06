@@ -24,12 +24,33 @@ hex_digit_t SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[12] = {
 volatile unsigned int* const hex_register_one_ptr = (unsigned int*)(HEX3_HEX0_BASE);
 volatile unsigned int* const hex_register_two_ptr = (unsigned int*)(HEX5_HEX4_BASE);
 
-// Input is a 32 bit value in decimal
+void write_to_hex(unsigned int* to_write) {
+    *hex_register_one_ptr = 0;
+    *hex_register_two_ptr = 0;
+
+    // register length - 1. Don't bitshift after last entry
+    for (int idx = 0; idx < 3; idx++) {
+        *hex_register_one_ptr |= *(to_write + idx);
+        *hex_register_one_ptr >>= 8;
+    }
+
+    *hex_register_one_ptr |= *(to_write + 3);
+} 
+
+// Input is a 32 bit value in decimal. If value is >999999 (max displayable number),
+// the function sets all 7SDs blank
 void display_hex(int value)
 {
-    // The max value displayable is 999,999
-    if (value > 999999) return;
-    
+    unsigned int digits[6] = {0};
+    unsigned char idx = 0;
+    if (value > 999999) {
+        for (idx = 0; idx < 4; idx++) {
+            digits[idx] = 0b0;
+        }
+        write_to_hex(digits);
+        return;
+    }
+
     int value_cpy = value;
 
     // take the abs value 
@@ -39,8 +60,6 @@ void display_hex(int value)
         is_negative = 1;
     } 
     
-    unsigned char idx = 0;
-    unsigned int digits[6];
     while (value_cpy > 0) {
         digits[idx] = SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[value_cpy % 10];
         
@@ -60,16 +79,7 @@ void display_hex(int value)
         digits[0] = SEVEN_SEG_DISPLAY_PATTERN_LOOKUP[0];   
     }
 
-    *hex_register_one_ptr = 0;
-    *hex_register_two_ptr = 0;
-
-    // register length - 1. Don't bitshift after last entry
-    for (idx = 0; idx < 3; idx++) {
-        *hex_register_one_ptr |= digits[idx];
-        *hex_register_one_ptr >>= 8;
-    }
-    *hex_register_one_ptr |= digits[3];
-
+    write_to_hex(digits);
     return;
 }
 
@@ -84,14 +94,19 @@ int read_switches(void) {
 // would happen irl but the effect is easily mitigated. Also, the
 // delay will help  
 
-volatile int const DELAY_LENGTH = 700000;
+volatile int DELAY_LENGTH = 700000;
 int main(void) {
     int num;
     volatile int delay_count = 0;
     while(1) {
+        // on 
         num = read_switches();
         display_hex(num);
-        for (delay_count = DELAY_LENGTH; delay_count != 0; --delay_count)
-            ; // delay loop
+
+        for (delay_count = DELAY_LENGTH; delay_count != 0; --delay_count) {}
+        
+        // off
+        display_hex(1000000);
+        for (delay_count = DELAY_LENGTH; delay_count != 0; --delay_count) {}
     }
 }
